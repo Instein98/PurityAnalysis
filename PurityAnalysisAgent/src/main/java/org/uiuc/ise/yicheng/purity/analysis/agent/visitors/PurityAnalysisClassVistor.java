@@ -13,8 +13,10 @@ public class PurityAnalysisClassVistor extends ClassVisitor {
     protected String slashClassName;
     protected ClassLoader loader;
 
-    PurityAnalysisClassVistor(ClassVisitor classVisitor, String className, ClassLoader loader){
+    public PurityAnalysisClassVistor(ClassVisitor classVisitor, String className, ClassLoader loader){
         super(Config.ASM_VERSION, classVisitor);
+        this.slashClassName = className;
+        this.loader = loader;
     }
 
     @Override

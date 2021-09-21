@@ -44,7 +44,7 @@
                 <configuration>
                     <archive>
                         <manifestEntries>
-                            <Premain-Class>org.myekstazi.agent.MyEkstaziAgent</Premain-Class>
+                            <Premain-Class>org.uiuc.ise.yicheng.purity.analysis.agent.PreMain</Premain-Class>
                             <Can-Redefine-Classes>true</Can-Redefine-Classes>
                             <Can-Retransform-Classes>true</Can-Retransform-Classes>
                         </manifestEntries>

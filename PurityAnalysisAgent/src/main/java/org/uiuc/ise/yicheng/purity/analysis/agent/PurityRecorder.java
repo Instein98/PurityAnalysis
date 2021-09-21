@@ -22,7 +22,7 @@ public class PurityRecorder {
     public static HashMap<Long, Stack<PurityStackFrame>> purityStack = new HashMap<>();
 
     public static void method_start(long threadId, String methodId){
-        LogUtil.log("method_start: " + methodId);
+        LogUtil.agentInfo("method_start: " + methodId);
         Stack<PurityStackFrame> stack = getPurityStack(threadId);
         if (stack.size() == 0){
             stack.push(new PurityStackFrame(methodId, null));
@@ -32,12 +32,13 @@ public class PurityRecorder {
     }
 
     public static void method_end(long threadId, String methodId){
-        LogUtil.log("method_end: " + methodId);
+        LogUtil.agentInfo("method_end: " + methodId);
         Stack<PurityStackFrame> stack = getPurityStack(threadId);
-        PurityStackFrame purityStackFrame = stack.peek();
+        PurityStackFrame purityStackFrame = stack.pop();
         // assert
         if (!purityStackFrame.getMethodId().equals(methodId)){
-            throw new RuntimeException(String.format("Method %s not found in purity stack frame!", methodId));
+            throw new RuntimeException(String.format("Method %s not found in purity stack frame!\nStack size: %d;\nTop element: %s;\nExpected element: %s",
+                    methodId, stack.size(), stack.size() == 0 ? "null" : purityStackFrame.getMethodId(), methodId));
         }
 
         purityStackFrame.getModifiedObj().removeAll(purityStackFrame.getCreatedObj());
@@ -61,14 +62,14 @@ public class PurityRecorder {
      *  analysis
      */
     public static void obj_new(long threadId, int objId){
-        LogUtil.log("obj_new!");
+        LogUtil.agentInfo("obj_new!");
         Stack<PurityStackFrame> stack = getPurityStack(threadId);
         if (stack.size() != 0)
             stack.peek().getCreatedObj().add(objId);
     }
 
     public static void obj_modify(long threadId, int objId){
-        LogUtil.log("obj_modify!");
+        LogUtil.agentInfo("obj_modify!");
         Stack<PurityStackFrame> stack = getPurityStack(threadId);
         if (stack.size() != 0)
             stack.peek().getModifiedObj().add(objId);
@@ -76,7 +77,7 @@ public class PurityRecorder {
 
     // a method is impure if it modifies the static field
     public static void static_field_modify(long threadId, String methodId){
-        LogUtil.log("static_field_modify!");
+        LogUtil.agentInfo("static_field_modify!");
         Stack<PurityStackFrame> stack = getPurityStack(threadId);
         // check if the stack status is expected.
         if (stack.size() == 0 || !stack.peek().getMethodId().equals(methodId)){

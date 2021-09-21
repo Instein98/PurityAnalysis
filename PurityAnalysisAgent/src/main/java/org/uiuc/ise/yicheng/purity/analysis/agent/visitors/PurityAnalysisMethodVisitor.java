@@ -1,5 +1,6 @@
 package org.uiuc.ise.yicheng.purity.analysis.agent.visitors;
 
+import org.objectweb.asm.Label;
 import org.objectweb.asm.MethodVisitor;
 import org.objectweb.asm.Type;
 import org.objectweb.asm.commons.LocalVariablesSorter;
@@ -11,7 +12,8 @@ import static org.objectweb.asm.Opcodes.*;
 /**
  * Created by Yicheng Ouyang on 2021/9/19
  */
-class PurityAnalysisMethodVisitor extends LocalVariablesSorter {
+// Todo: add big try catch for the method.
+public class PurityAnalysisMethodVisitor extends LocalVariablesSorter {
 
 //    public boolean isTestMethod;
 //    public boolean expectedException;
@@ -32,7 +34,12 @@ class PurityAnalysisMethodVisitor extends LocalVariablesSorter {
 
     private int threadIdLocalIdx;
 
-    PurityAnalysisMethodVisitor(MethodVisitor mv, String methodName, int access, String desc, String className, boolean isStatic, boolean isPublic) {
+    private final static Label tryStart = new Label();
+    private final static Label tryEnd = new Label();
+    private final static Label catchStart = new Label();
+    private final static Label catchEnd = new Label();
+
+    public PurityAnalysisMethodVisitor(MethodVisitor mv, String methodName, int access, String desc, String className, boolean isStatic, boolean isPublic) {
         super(Config.ASM_VERSION, access, desc, mv);
         this.methodName = methodName;
         this.className = className;
@@ -60,6 +67,8 @@ class PurityAnalysisMethodVisitor extends LocalVariablesSorter {
     // start of the method
     public void visitCode() {
         mv.visitCode();
+        mv.visitTryCatchBlock(tryStart, tryEnd, catchStart, "java/lang/Throwable");
+        mv.visitLabel(tryStart);
         threadIdLocalIdx = this.newLocal(Type.getType("J"));
         mv.visitMethodInsn(INVOKESTATIC, "java/lang/Thread", "currentThread",
                 "()Ljava/lang/Thread;", false);
@@ -100,7 +109,8 @@ class PurityAnalysisMethodVisitor extends LocalVariablesSorter {
             mv.visitInsn(DUP_X2);
             // ..., ref, idx, value, ref
             mv.visitVarInsn(LLOAD, threadIdLocalIdx);
-            mv.visitInsn(SWAP);
+            mv.visitInsn(DUP2_X1);
+            mv.visitInsn(POP2);
             // ..., ref, idx, value, threadId, ref
             mv.visitMethodInsn(INVOKESTATIC, "java/lang/System", "identityHashCode",
                     "(Ljava/lang/Object;)I", false);
@@ -119,7 +129,8 @@ class PurityAnalysisMethodVisitor extends LocalVariablesSorter {
             mv.visitInsn(POP);
             // ..., ref, idx, value, ref
             mv.visitVarInsn(LLOAD, threadIdLocalIdx);
-            mv.visitInsn(SWAP);
+            mv.visitInsn(DUP2_X1);
+            mv.visitInsn(POP2);
             // ..., ref, idx, value, threadId, ref
             mv.visitMethodInsn(INVOKESTATIC, "java/lang/System", "identityHashCode",
                     "(Ljava/lang/Object;)I", false);
@@ -135,7 +146,8 @@ class PurityAnalysisMethodVisitor extends LocalVariablesSorter {
         if (opcode == NEWARRAY) {
             mv.visitInsn(DUP);
             mv.visitVarInsn(LLOAD, threadIdLocalIdx);
-            mv.visitInsn(SWAP);
+            mv.visitInsn(DUP2_X1);
+            mv.visitInsn(POP2);
             mv.visitMethodInsn(INVOKESTATIC, "java/lang/System", "identityHashCode",
                     "(Ljava/lang/Object;)I", false);
             mv.visitMethodInsn(INVOKESTATIC, PurityRecorder.SLASH_CLASS_NAME, PurityRecorder.OBJ_NEW,
@@ -149,7 +161,8 @@ class PurityAnalysisMethodVisitor extends LocalVariablesSorter {
         if (opcode == ANEWARRAY) {
             mv.visitInsn(DUP);
             mv.visitVarInsn(LLOAD, threadIdLocalIdx);
-            mv.visitInsn(SWAP);
+            mv.visitInsn(DUP2_X1);
+            mv.visitInsn(POP2);
             mv.visitMethodInsn(INVOKESTATIC, "java/lang/System", "identityHashCode",
                     "(Ljava/lang/Object;)I", false);
             mv.visitMethodInsn(INVOKESTATIC, PurityRecorder.SLASH_CLASS_NAME, PurityRecorder.OBJ_NEW,
@@ -175,7 +188,8 @@ class PurityAnalysisMethodVisitor extends LocalVariablesSorter {
                 mv.visitInsn(DUP);
                 // ..., value, obj, obj
                 mv.visitVarInsn(LLOAD, threadIdLocalIdx);
-                mv.visitInsn(SWAP);
+                mv.visitInsn(DUP2_X1);
+                mv.visitInsn(POP2);
                 mv.visitMethodInsn(INVOKESTATIC, "java/lang/System", "identityHashCode",
                         "(Ljava/lang/Object;)I", false);
                 mv.visitMethodInsn(INVOKESTATIC, PurityRecorder.SLASH_CLASS_NAME,
@@ -190,26 +204,43 @@ class PurityAnalysisMethodVisitor extends LocalVariablesSorter {
                 mv.visitVarInsn(LLOAD, threadIdLocalIdx);
                 mv.visitLdcInsn(this.selfMethodId);
                 mv.visitMethodInsn(INVOKESTATIC, PurityRecorder.SLASH_CLASS_NAME,
-                        PurityRecorder.STATIC_FIELD_MODIFY, "()V", false);
+                        PurityRecorder.STATIC_FIELD_MODIFY, "(JLjava/lang/String;)V", false);
             }
         mv.visitFieldInsn(opc, owner, name, desc);
     }
 
-    public void dynamicallyLog(String msg) {
-        mv.visitLdcInsn(msg);
-        mv.visitMethodInsn(INVOKESTATIC, "org/myekstazi/agent/MyEkstaziAgent", "log",
-                "(Ljava/lang/Object;)V", false);
-    }
+//    public void dynamicallyLog(String msg) {
+//        mv.visitLdcInsn(msg);
+//        mv.visitMethodInsn(INVOKESTATIC, "org/myekstazi/agent/MyEkstaziAgent", "log",
+//                "(Ljava/lang/Object;)V", false);
+//    }
 
     // Todo: track the new event for all created array
     public void visitMultiANewArrayInsn(String descriptor, int numDimensions) {
         mv.visitMultiANewArrayInsn(descriptor, numDimensions);
         mv.visitInsn(DUP);
         mv.visitVarInsn(LLOAD, threadIdLocalIdx);
-        mv.visitInsn(SWAP);
+        mv.visitInsn(DUP2_X1);
+        mv.visitInsn(POP2);
         mv.visitMethodInsn(INVOKESTATIC, "java/lang/System", "identityHashCode",
                 "(Ljava/lang/Object;)I", false);
         mv.visitMethodInsn(INVOKESTATIC, PurityRecorder.SLASH_CLASS_NAME, PurityRecorder.OBJ_NEW,
                 "(JI)V", false);
+    }
+
+    @Override
+    public void visitEnd() {
+        mv.visitLabel(tryEnd);
+        mv.visitJumpInsn(GOTO, catchEnd);
+        mv.visitLabel(catchStart);
+        // exception caught
+        mv.visitVarInsn(LLOAD, threadIdLocalIdx);
+        mv.visitLdcInsn(this.selfMethodId);
+        mv.visitMethodInsn(INVOKESTATIC, PurityRecorder.SLASH_CLASS_NAME, PurityRecorder.METHOD_END,
+                "(JLjava/lang/String;)V", false);
+        mv.visitInsn(ATHROW);
+        mv.visitLabel(catchEnd);
+
+        super.visitEnd();
     }
 }
