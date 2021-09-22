@@ -4,13 +4,11 @@ package org.uiuc.ise.yicheng.purity.analysis.agent;
 import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.ClassVisitor;
 import org.objectweb.asm.ClassWriter;
-import org.objectweb.asm.Label;
 import org.objectweb.asm.util.CheckClassAdapter;
 import org.uiuc.ise.yicheng.purity.analysis.agent.utils.FileUtil;
 import org.uiuc.ise.yicheng.purity.analysis.agent.utils.LogUtil;
 import org.uiuc.ise.yicheng.purity.analysis.agent.visitors.PurityAnalysisClassVistor;
 
-import java.io.PrintWriter;
 import java.lang.instrument.ClassFileTransformer;
 import java.lang.instrument.IllegalClassFormatException;
 import java.security.ProtectionDomain;
@@ -44,7 +42,7 @@ public class PurityAnalysisTransformer implements ClassFileTransformer {
             LogUtil.agentInfo("Instrumenting " + className);
 
             ClassReader cr = new ClassReader(classfileBuffer);
-            ClassWriter cw = new ClassWriter(cr, ClassWriter.COMPUTE_MAXS);
+            ClassWriter cw = new ClassWriter(cr, ClassWriter.COMPUTE_FRAMES);
             ClassVisitor cv = new PurityAnalysisClassVistor(cw, className, loader);
 
             cr.accept(cv, ClassReader.EXPAND_FRAMES);

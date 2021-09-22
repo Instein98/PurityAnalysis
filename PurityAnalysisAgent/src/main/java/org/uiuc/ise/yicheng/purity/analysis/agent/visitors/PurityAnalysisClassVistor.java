@@ -29,7 +29,8 @@ public class PurityAnalysisClassVistor extends ClassVisitor {
         boolean isEnum = (access & Opcodes.ACC_ENUM) != 0;
         boolean isPublic = (access & Opcodes.ACC_PUBLIC) != 0;
         boolean isNative = (access & Opcodes.ACC_NATIVE) != 0;
-        if (!isNative && !isEnum && !"<clinit>".equals(name)){
+        boolean isAbstract = (access & Opcodes.ACC_ABSTRACT) != 0;
+        if (!isNative && !isEnum && !isAbstract && !"<clinit>".equals(name)){
             mv = new PurityAnalysisMethodVisitor(mv, name, access, desc, slashClassName, isStatic, isPublic);
         }
         return mv;

@@ -34,10 +34,10 @@ public class PurityAnalysisMethodVisitor extends LocalVariablesSorter {
 
     private int threadIdLocalIdx;
 
-    private final static Label tryStart = new Label();
-    private final static Label tryEnd = new Label();
-    private final static Label catchStart = new Label();
-    private final static Label catchEnd = new Label();
+    private Label tryStart = new Label();
+    private Label tryEnd = new Label();
+    private Label catchStart = new Label();
+    private Label catchEnd = new Label();
 
     public PurityAnalysisMethodVisitor(MethodVisitor mv, String methodName, int access, String desc, String className, boolean isStatic, boolean isPublic) {
         super(Config.ASM_VERSION, access, desc, mv);
@@ -67,6 +67,10 @@ public class PurityAnalysisMethodVisitor extends LocalVariablesSorter {
     // start of the method
     public void visitCode() {
         mv.visitCode();
+//        tryStart = new Label();
+//        tryEnd = new Label();
+//        catchStart = new Label();
+//        catchEnd = new Label();
         mv.visitTryCatchBlock(tryStart, tryEnd, catchStart, "java/lang/Throwable");
         mv.visitLabel(tryStart);
         threadIdLocalIdx = this.newLocal(Type.getType("J"));
