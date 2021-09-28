@@ -18,6 +18,10 @@ public class LogUtil {
             String agentErrorPath = Config.workingDirectory() + "/agent-error.log";
             FileUtil.prepare(agentErrorPath);
             agentError = new PrintWriter(agentErrorPath);
+
+            String classCheckerPath = Config.workingDirectory() + "/class-checker.log";
+            FileUtil.prepare(classCheckerPath);
+            classChecker = new PrintWriter(classCheckerPath);
         } catch (Throwable t){
             t.printStackTrace();
         }
@@ -26,6 +30,8 @@ public class LogUtil {
     public static PrintWriter agentInfo;
 
     public static PrintWriter agentError;
+
+    public static PrintWriter classChecker;
 
     public static void agentInfo(String message){
         agentInfo.println(message);

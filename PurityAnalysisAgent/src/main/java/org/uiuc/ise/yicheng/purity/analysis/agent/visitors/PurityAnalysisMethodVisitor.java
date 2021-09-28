@@ -39,38 +39,36 @@ public class PurityAnalysisMethodVisitor extends LocalVariablesSorter {
     private Label catchStart = new Label();
     private Label catchEnd = new Label();
 
+    private Object[] initLocals = null;
+
     public PurityAnalysisMethodVisitor(MethodVisitor mv, String methodName, int access, String desc, String className, boolean isStatic, boolean isPublic) {
         super(Config.ASM_VERSION, access, desc, mv);
         this.methodName = methodName;
         this.className = className;
         this.selfDesc = desc;
-//        isTestMethod = isJUnit3TestClass && methodName.startsWith("test");
         selfReturnType = Type.getReturnType(desc);
         selfMethodId = String.format("%s%c%s%c%s", className, Config.MID_SEPARATOR, methodName, Config.MID_SEPARATOR, desc);
         this.isStatic = isStatic;
-//        expectedException = false;
-//        needAnalysePurity = shouldAnalysePurity();
-//        needSkipMethod = !selfReturnType.getDescriptor().equals("V")
-//                && !(Type.getArgumentTypes(this.selfDesc).length == 0 && isStatic)
-//                && !methodName.equals("<init>");
-//        MyEkstaziAgent.log("PurityRecordMVAdapter is initialized!!!");
         this.isPublic = isPublic;
-//        if (!isTestMethod)
-//            isTestMethod = isTestngClass && isPublic;
+
+        Type[] argTypes = Type.getArgumentTypes(selfDesc);
+        int initLocalLen = argTypes.length + (isStatic ? 0 : 1);
+        initLocals = new Object[initLocalLen];
+        int idx = 0;
+        if (!isStatic){
+            initLocals[idx] = className;
+            idx++;
+        }
+        for (Type type: argTypes){
+            initLocals[idx] = type.getInternalName();
+            idx++;
+        }
     }
-
-//    public boolean shouldAnalysePurity() {
-//        return !methodName.equals("<clinit>") && !isEnum;
-//    }
-
 
     // start of the method
     public void visitCode() {
         mv.visitCode();
-//        tryStart = new Label();
-//        tryEnd = new Label();
-//        catchStart = new Label();
-//        catchEnd = new Label();
+//        mv.visitFrame(F_NEW, initLocals.length, initLocals, 0, new Object[]{});
         mv.visitTryCatchBlock(tryStart, tryEnd, catchStart, "java/lang/Throwable");
         mv.visitLabel(tryStart);
         threadIdLocalIdx = this.newLocal(Type.getType("J"));
@@ -113,7 +111,9 @@ public class PurityAnalysisMethodVisitor extends LocalVariablesSorter {
             mv.visitInsn(DUP_X2);
             // ..., ref, idx, value, ref
             mv.visitVarInsn(LLOAD, threadIdLocalIdx);
+            // ..., ref, idx, value, ref, threadid
             mv.visitInsn(DUP2_X1);
+            // ..., ref, idx, value, threadid, ref, threadid
             mv.visitInsn(POP2);
             // ..., ref, idx, value, threadId, ref
             mv.visitMethodInsn(INVOKESTATIC, "java/lang/System", "identityHashCode",
@@ -238,13 +238,19 @@ public class PurityAnalysisMethodVisitor extends LocalVariablesSorter {
         mv.visitJumpInsn(GOTO, catchEnd);
         mv.visitLabel(catchStart);
         // exception caught
+        mv.visitFrame(F_SAME1, 0, null, 1, new Object[] {"java/lang/Throwable"});
         mv.visitVarInsn(LLOAD, threadIdLocalIdx);
         mv.visitLdcInsn(this.selfMethodId);
         mv.visitMethodInsn(INVOKESTATIC, PurityRecorder.SLASH_CLASS_NAME, PurityRecorder.METHOD_END,
                 "(JLjava/lang/String;)V", false);
         mv.visitInsn(ATHROW);
         mv.visitLabel(catchEnd);
-
+        mv.visitFrame(F_SAME, 0, null, 0, null);
         super.visitEnd();
+    }
+
+    @Override
+    public void visitMaxs(int maxStack, int maxLocals) {
+        super.visitMaxs(maxStack + 5, maxLocals + 1);
     }
 }

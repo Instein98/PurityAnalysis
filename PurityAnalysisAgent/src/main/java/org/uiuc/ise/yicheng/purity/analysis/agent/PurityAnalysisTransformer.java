@@ -9,11 +9,14 @@ import org.uiuc.ise.yicheng.purity.analysis.agent.utils.FileUtil;
 import org.uiuc.ise.yicheng.purity.analysis.agent.utils.LogUtil;
 import org.uiuc.ise.yicheng.purity.analysis.agent.visitors.PurityAnalysisClassVistor;
 
+import java.io.PrintWriter;
 import java.lang.instrument.ClassFileTransformer;
 import java.lang.instrument.IllegalClassFormatException;
 import java.security.ProtectionDomain;
 import java.util.HashSet;
 import java.util.Set;
+
+import static org.uiuc.ise.yicheng.purity.analysis.agent.utils.LogUtil.*;
 
 /**
  * Created by Yicheng Ouyang on 2021/9/19
@@ -27,6 +30,8 @@ public class PurityAnalysisTransformer implements ClassFileTransformer {
         excludeClasses.add("jdk");
         excludeClasses.add("sun");
         excludeClasses.add("com/sun");
+        excludeClasses.add("org/apache/maven");
+        excludeClasses.add("junit");
         excludeClasses.add("org/uiuc/ise");
     }
 
@@ -39,25 +44,25 @@ public class PurityAnalysisTransformer implements ClassFileTransformer {
                 return result;
             }
 
-            LogUtil.agentInfo("Instrumenting " + className);
+            agentInfo("Instrumenting " + className);
 
             ClassReader cr = new ClassReader(classfileBuffer);
-            ClassWriter cw = new ClassWriter(cr, ClassWriter.COMPUTE_FRAMES);
+            ClassWriter cw = new ClassWriter(cr, 0);
             ClassVisitor cv = new PurityAnalysisClassVistor(cw, className, loader);
 
-            cr.accept(cv, ClassReader.EXPAND_FRAMES);
+            cr.accept(cv, 0);
             result = cw.toByteArray();
 
             FileUtil.write(Config.workingDirectory() + "/PurityAnalysisTransformer/"
                     + className.replace('/', '.') + ".class", result);
 
-//            CheckClassAdapter.verify(
-//                    new ClassReader(result),
-//                    loader,
-//                    false,
-//                    new PrintWriter(System.out)
-////                    new PrintWriter(LogUtil.agentError)
-//            );
+            CheckClassAdapter.verify(
+                    new ClassReader(result),
+                    loader,
+                    true,
+                    new PrintWriter(classChecker)
+//                    new PrintWriter(LogUtil.agentError)
+            );
         } catch (Throwable t){
             t.printStackTrace();
             LogUtil.agentError(t);
