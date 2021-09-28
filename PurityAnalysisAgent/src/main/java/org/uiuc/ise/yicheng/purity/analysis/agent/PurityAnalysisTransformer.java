@@ -57,11 +57,10 @@ public class PurityAnalysisTransformer implements ClassFileTransformer {
                     + className.replace('/', '.') + ".class", result);
 
             CheckClassAdapter.verify(
-                    new ClassReader(result),
-                    loader,
-                    true,
-                    new PrintWriter(classChecker)
-//                    new PrintWriter(LogUtil.agentError)
+                new ClassReader(result),
+                loader,
+                true,
+                new PrintWriter(classChecker)
             );
         } catch (Throwable t){
             t.printStackTrace();

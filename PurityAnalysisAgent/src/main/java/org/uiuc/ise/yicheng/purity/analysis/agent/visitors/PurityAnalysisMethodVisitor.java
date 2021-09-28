@@ -8,12 +8,16 @@ import org.uiuc.ise.yicheng.purity.analysis.agent.Config;
 import org.uiuc.ise.yicheng.purity.analysis.agent.PurityRecorder;
 
 import static org.objectweb.asm.Opcodes.*;
+import static org.objectweb.asm.Type.*;
+import static org.objectweb.asm.Type.DOUBLE;
+import static org.objectweb.asm.Type.FLOAT;
+import static org.objectweb.asm.Type.LONG;
 
 /**
  * Created by Yicheng Ouyang on 2021/9/19
  */
 // Todo: add big try catch for the method.
-public class PurityAnalysisMethodVisitor extends LocalVariablesSorter {
+public class PurityAnalysisMethodVisitor extends MethodVisitor {
 
 //    public boolean isTestMethod;
 //    public boolean expectedException;
@@ -32,17 +36,13 @@ public class PurityAnalysisMethodVisitor extends LocalVariablesSorter {
     private boolean isStatic;
     private boolean isPublic = false;
 
-    private int threadIdLocalIdx;
-
     private Label tryStart = new Label();
     private Label tryEnd = new Label();
     private Label catchStart = new Label();
     private Label catchEnd = new Label();
 
-    private Object[] initLocals = null;
-
     public PurityAnalysisMethodVisitor(MethodVisitor mv, String methodName, int access, String desc, String className, boolean isStatic, boolean isPublic) {
-        super(Config.ASM_VERSION, access, desc, mv);
+        super(Config.ASM_VERSION, mv);
         this.methodName = methodName;
         this.className = className;
         this.selfDesc = desc;
@@ -50,19 +50,6 @@ public class PurityAnalysisMethodVisitor extends LocalVariablesSorter {
         selfMethodId = String.format("%s%c%s%c%s", className, Config.MID_SEPARATOR, methodName, Config.MID_SEPARATOR, desc);
         this.isStatic = isStatic;
         this.isPublic = isPublic;
-
-        Type[] argTypes = Type.getArgumentTypes(selfDesc);
-        int initLocalLen = argTypes.length + (isStatic ? 0 : 1);
-        initLocals = new Object[initLocalLen];
-        int idx = 0;
-        if (!isStatic){
-            initLocals[idx] = className;
-            idx++;
-        }
-        for (Type type: argTypes){
-            initLocals[idx] = type.getInternalName();
-            idx++;
-        }
     }
 
     // start of the method
@@ -71,33 +58,25 @@ public class PurityAnalysisMethodVisitor extends LocalVariablesSorter {
 //        mv.visitFrame(F_NEW, initLocals.length, initLocals, 0, new Object[]{});
         mv.visitTryCatchBlock(tryStart, tryEnd, catchStart, "java/lang/Throwable");
         mv.visitLabel(tryStart);
-        threadIdLocalIdx = this.newLocal(Type.getType("J"));
-        mv.visitMethodInsn(INVOKESTATIC, "java/lang/Thread", "currentThread",
-                "()Ljava/lang/Thread;", false);
-        mv.visitMethodInsn(INVOKEVIRTUAL, "java/lang/Thread", "getId", "()J", false);
-        mv.visitVarInsn(LSTORE, threadIdLocalIdx);
-        mv.visitVarInsn(LLOAD, threadIdLocalIdx);
         mv.visitLdcInsn(this.selfMethodId);
         mv.visitMethodInsn(INVOKESTATIC, PurityRecorder.SLASH_CLASS_NAME, PurityRecorder.METHOD_START,
-                "(JLjava/lang/String;)V", false);
+                "(Ljava/lang/String;)V", false);
     }
 
     public void visitInsn(int opcode) {
         if (opcode >= IRETURN && opcode <= RETURN) {
             // when a <init> method ends, trigger obj_new event
             if (methodName.equals("<init>")) {
-                mv.visitVarInsn(LLOAD, threadIdLocalIdx);
                 mv.visitVarInsn(ALOAD, 0);
                 mv.visitMethodInsn(INVOKESTATIC, "java/lang/System", "identityHashCode",
                         "(Ljava/lang/Object;)I", false);
                 mv.visitMethodInsn(INVOKESTATIC, PurityRecorder.SLASH_CLASS_NAME, PurityRecorder.OBJ_NEW,
-                        "(JI)V", false);
+                        "(I)V", false);
             }
             // trigger method_end event
-            mv.visitVarInsn(LLOAD, threadIdLocalIdx);
             mv.visitLdcInsn(this.selfMethodId);
             mv.visitMethodInsn(INVOKESTATIC, PurityRecorder.SLASH_CLASS_NAME, PurityRecorder.METHOD_END,
-                    "(JLjava/lang/String;)V", false);
+                    "(Ljava/lang/String;)V", false);
         }
 
         // IASTORE, FASTORE, DASTORE, AASTORE, CASTORE, SASTORE: value of category 1 computational type
@@ -110,16 +89,10 @@ public class PurityAnalysisMethodVisitor extends LocalVariablesSorter {
             // ..., idx, value, ref
             mv.visitInsn(DUP_X2);
             // ..., ref, idx, value, ref
-            mv.visitVarInsn(LLOAD, threadIdLocalIdx);
-            // ..., ref, idx, value, ref, threadid
-            mv.visitInsn(DUP2_X1);
-            // ..., ref, idx, value, threadid, ref, threadid
-            mv.visitInsn(POP2);
-            // ..., ref, idx, value, threadId, ref
             mv.visitMethodInsn(INVOKESTATIC, "java/lang/System", "identityHashCode",
                     "(Ljava/lang/Object;)I", false);
             mv.visitMethodInsn(INVOKESTATIC, PurityRecorder.SLASH_CLASS_NAME,
-                    PurityRecorder.OBJ_MODIFY, "(JI)V", false);
+                    PurityRecorder.OBJ_MODIFY, "(I)V", false);
         }
         // LASTORE, BASTORE: value of category 2 computational type
         else if (opcode == LASTORE || opcode == DASTORE) {
@@ -132,14 +105,10 @@ public class PurityAnalysisMethodVisitor extends LocalVariablesSorter {
             // ..., ref, idx, value, ref, idx
             mv.visitInsn(POP);
             // ..., ref, idx, value, ref
-            mv.visitVarInsn(LLOAD, threadIdLocalIdx);
-            mv.visitInsn(DUP2_X1);
-            mv.visitInsn(POP2);
-            // ..., ref, idx, value, threadId, ref
             mv.visitMethodInsn(INVOKESTATIC, "java/lang/System", "identityHashCode",
                     "(Ljava/lang/Object;)I", false);
             mv.visitMethodInsn(INVOKESTATIC, PurityRecorder.SLASH_CLASS_NAME,
-                    PurityRecorder.OBJ_MODIFY, "(JI)V", false);
+                    PurityRecorder.OBJ_MODIFY, "(I)V", false);
         }
         mv.visitInsn(opcode);
     }
@@ -149,13 +118,10 @@ public class PurityAnalysisMethodVisitor extends LocalVariablesSorter {
         // primitive array creation
         if (opcode == NEWARRAY) {
             mv.visitInsn(DUP);
-            mv.visitVarInsn(LLOAD, threadIdLocalIdx);
-            mv.visitInsn(DUP2_X1);
-            mv.visitInsn(POP2);
             mv.visitMethodInsn(INVOKESTATIC, "java/lang/System", "identityHashCode",
                     "(Ljava/lang/Object;)I", false);
             mv.visitMethodInsn(INVOKESTATIC, PurityRecorder.SLASH_CLASS_NAME, PurityRecorder.OBJ_NEW,
-                    "(JI)V", false);
+                    "(I)V", false);
         }
     }
 
@@ -164,13 +130,10 @@ public class PurityAnalysisMethodVisitor extends LocalVariablesSorter {
         // reference array creation
         if (opcode == ANEWARRAY) {
             mv.visitInsn(DUP);
-            mv.visitVarInsn(LLOAD, threadIdLocalIdx);
-            mv.visitInsn(DUP2_X1);
-            mv.visitInsn(POP2);
             mv.visitMethodInsn(INVOKESTATIC, "java/lang/System", "identityHashCode",
                     "(Ljava/lang/Object;)I", false);
             mv.visitMethodInsn(INVOKESTATIC, PurityRecorder.SLASH_CLASS_NAME, PurityRecorder.OBJ_NEW,
-                    "(JI)V", false);
+                    "(I)V", false);
         }
     }
 
@@ -191,13 +154,10 @@ public class PurityAnalysisMethodVisitor extends LocalVariablesSorter {
                 }
                 mv.visitInsn(DUP);
                 // ..., value, obj, obj
-                mv.visitVarInsn(LLOAD, threadIdLocalIdx);
-                mv.visitInsn(DUP2_X1);
-                mv.visitInsn(POP2);
                 mv.visitMethodInsn(INVOKESTATIC, "java/lang/System", "identityHashCode",
                         "(Ljava/lang/Object;)I", false);
                 mv.visitMethodInsn(INVOKESTATIC, PurityRecorder.SLASH_CLASS_NAME,
-                        PurityRecorder.OBJ_MODIFY, "(JI)V", false);
+                        PurityRecorder.OBJ_MODIFY, "(I)V", false);
                 if (t.getSize() == 2) {
                     mv.visitInsn(DUP_X2);
                     mv.visitInsn(POP);
@@ -205,47 +165,66 @@ public class PurityAnalysisMethodVisitor extends LocalVariablesSorter {
                     mv.visitInsn(SWAP);
                 }
             } else if (opc == PUTSTATIC) {
-                mv.visitVarInsn(LLOAD, threadIdLocalIdx);
                 mv.visitLdcInsn(this.selfMethodId);
                 mv.visitMethodInsn(INVOKESTATIC, PurityRecorder.SLASH_CLASS_NAME,
-                        PurityRecorder.STATIC_FIELD_MODIFY, "(JLjava/lang/String;)V", false);
+                        PurityRecorder.STATIC_FIELD_MODIFY, "(Ljava/lang/String;)V", false);
             }
         mv.visitFieldInsn(opc, owner, name, desc);
     }
-
-//    public void dynamicallyLog(String msg) {
-//        mv.visitLdcInsn(msg);
-//        mv.visitMethodInsn(INVOKESTATIC, "org/myekstazi/agent/MyEkstaziAgent", "log",
-//                "(Ljava/lang/Object;)V", false);
-//    }
 
     // Todo: track the new event for all created array
     public void visitMultiANewArrayInsn(String descriptor, int numDimensions) {
         mv.visitMultiANewArrayInsn(descriptor, numDimensions);
         mv.visitInsn(DUP);
-        mv.visitVarInsn(LLOAD, threadIdLocalIdx);
-        mv.visitInsn(DUP2_X1);
-        mv.visitInsn(POP2);
         mv.visitMethodInsn(INVOKESTATIC, "java/lang/System", "identityHashCode",
                 "(Ljava/lang/Object;)I", false);
         mv.visitMethodInsn(INVOKESTATIC, PurityRecorder.SLASH_CLASS_NAME, PurityRecorder.OBJ_NEW,
-                "(JI)V", false);
+                "(I)V", false);
     }
 
     @Override
     public void visitEnd() {
         mv.visitLabel(tryEnd);
+        mv.visitFrame(F_SAME, 0, null, 0, null); /* This line takes me more than 6 hours */
         mv.visitJumpInsn(GOTO, catchEnd);
         mv.visitLabel(catchStart);
         // exception caught
         mv.visitFrame(F_SAME1, 0, null, 1, new Object[] {"java/lang/Throwable"});
-        mv.visitVarInsn(LLOAD, threadIdLocalIdx);
         mv.visitLdcInsn(this.selfMethodId);
         mv.visitMethodInsn(INVOKESTATIC, PurityRecorder.SLASH_CLASS_NAME, PurityRecorder.METHOD_END,
-                "(JLjava/lang/String;)V", false);
+                "(Ljava/lang/String;)V", false);
         mv.visitInsn(ATHROW);
         mv.visitLabel(catchEnd);
         mv.visitFrame(F_SAME, 0, null, 0, null);
+        switch (Type.getReturnType(selfDesc).getSort()){
+            case BYTE:
+            case CHAR:
+            case SHORT:
+            case BOOLEAN:
+            case INT:
+                mv.visitLdcInsn(0);
+                mv.visitInsn(IRETURN);
+                break;
+            case LONG:
+                mv.visitLdcInsn(0L);
+                mv.visitInsn(LRETURN);
+                break;
+            case FLOAT:
+                mv.visitLdcInsn(0f);
+                mv.visitInsn(FRETURN);
+                break;
+            case DOUBLE:
+                mv.visitLdcInsn(0.0);
+                mv.visitInsn(DRETURN);
+                break;
+            case OBJECT:
+                mv.visitInsn(ACONST_NULL);
+                mv.visitInsn(ARETURN);
+                break;
+            case VOID:
+                mv.visitInsn(RETURN);
+                break;
+        }
         super.visitEnd();
     }
 

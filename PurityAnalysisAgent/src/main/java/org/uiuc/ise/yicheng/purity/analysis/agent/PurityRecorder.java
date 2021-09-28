@@ -21,7 +21,8 @@ public class PurityRecorder {
     public static HashMap<String, Boolean> methodPurityMap = new HashMap();
     public static HashMap<Long, Stack<PurityStackFrame>> purityStack = new HashMap<>();
 
-    public static void method_start(long threadId, String methodId){
+    public static void method_start(String methodId){
+        Long threadId = Thread.currentThread().getId();
         LogUtil.agentInfo("method_start: " + methodId);
         Stack<PurityStackFrame> stack = getPurityStack(threadId);
         if (stack.size() == 0){
@@ -31,7 +32,8 @@ public class PurityRecorder {
         }
     }
 
-    public static void method_end(long threadId, String methodId){
+    public static void method_end(String methodId){
+        Long threadId = Thread.currentThread().getId();
         LogUtil.agentInfo("method_end: " + methodId);
         Stack<PurityStackFrame> stack = getPurityStack(threadId);
         PurityStackFrame purityStackFrame = stack.pop();
@@ -61,14 +63,16 @@ public class PurityRecorder {
      *  when recorderStack is empty. It is because <init> is excluded for purity
      *  analysis
      */
-    public static void obj_new(long threadId, int objId){
+    public static void obj_new(int objId){
+        Long threadId = Thread.currentThread().getId();
         LogUtil.agentInfo("obj_new!");
         Stack<PurityStackFrame> stack = getPurityStack(threadId);
         if (stack.size() != 0)
             stack.peek().getCreatedObj().add(objId);
     }
 
-    public static void obj_modify(long threadId, int objId){
+    public static void obj_modify(int objId){
+        Long threadId = Thread.currentThread().getId();
         LogUtil.agentInfo("obj_modify!");
         Stack<PurityStackFrame> stack = getPurityStack(threadId);
         if (stack.size() != 0)
@@ -76,7 +80,8 @@ public class PurityRecorder {
     }
 
     // a method is impure if it modifies the static field
-    public static void static_field_modify(long threadId, String methodId){
+    public static void static_field_modify(String methodId){
+        Long threadId = Thread.currentThread().getId();
         LogUtil.agentInfo("static_field_modify!");
         Stack<PurityStackFrame> stack = getPurityStack(threadId);
         // check if the stack status is expected.
