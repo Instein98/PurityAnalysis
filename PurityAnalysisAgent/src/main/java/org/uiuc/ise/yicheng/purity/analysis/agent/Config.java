@@ -10,7 +10,7 @@ import java.util.Date;
  */
 public class Config {
     public static int ASM_VERSION = Opcodes.ASM9;
-    public static char MID_SEPARATOR = '#';
+    public static String MID_SEPARATOR = "#";
 
     public static synchronized String version() {
         String version = System.getProperty("purity.analysis.version");

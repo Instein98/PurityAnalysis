@@ -19,15 +19,11 @@ import static org.objectweb.asm.Type.LONG;
 // Todo: add big try catch for the method.
 public class PurityAnalysisMethodVisitor extends MethodVisitor {
 
-//    public boolean isTestMethod;
-//    public boolean expectedException;
     /**
      * There is no need to do purity analysis for constructor or static initializer,
      * purity analysis for constructor will cause problem: VerifyError: (method: <init>)
      * Unable to pop operand off an empty stack
      */
-//    private boolean needAnalysePurity;
-//    private boolean needSkipMethod;
     private String methodName = null;
     private String className = null;
     private String selfDesc = null;
@@ -35,6 +31,7 @@ public class PurityAnalysisMethodVisitor extends MethodVisitor {
     private Type selfReturnType = null;
     private boolean isStatic;
     private boolean isPublic = false;
+    private boolean isConstructor = false;
 
     private Label tryStart = new Label();
     private Label tryEnd = new Label();
@@ -47,9 +44,10 @@ public class PurityAnalysisMethodVisitor extends MethodVisitor {
         this.className = className;
         this.selfDesc = desc;
         selfReturnType = Type.getReturnType(desc);
-        selfMethodId = String.format("%s%c%s%c%s", className, Config.MID_SEPARATOR, methodName, Config.MID_SEPARATOR, desc);
+        selfMethodId = String.join(Config.MID_SEPARATOR, className, methodName, desc);
         this.isStatic = isStatic;
         this.isPublic = isPublic;
+        this.isConstructor = "<init>".equals(methodName);
     }
 
     // start of the method
@@ -66,7 +64,7 @@ public class PurityAnalysisMethodVisitor extends MethodVisitor {
     public void visitInsn(int opcode) {
         if (opcode >= IRETURN && opcode <= RETURN) {
             // when a <init> method ends, trigger obj_new event
-            if (methodName.equals("<init>")) {
+            if (this.isConstructor) {
                 mv.visitVarInsn(ALOAD, 0);
                 mv.visitMethodInsn(INVOKESTATIC, "java/lang/System", "identityHashCode",
                         "(Ljava/lang/Object;)I", false);
@@ -74,6 +72,12 @@ public class PurityAnalysisMethodVisitor extends MethodVisitor {
                         "(I)V", false);
             }
             // trigger method_end event
+            mv.visitLdcInsn(this.selfMethodId);
+            mv.visitMethodInsn(INVOKESTATIC, PurityRecorder.SLASH_CLASS_NAME, PurityRecorder.METHOD_END,
+                    "(Ljava/lang/String;)V", false);
+        }
+
+        if (opcode == ATHROW){
             mv.visitLdcInsn(this.selfMethodId);
             mv.visitMethodInsn(INVOKESTATIC, PurityRecorder.SLASH_CLASS_NAME, PurityRecorder.METHOD_END,
                     "(Ljava/lang/String;)V", false);
