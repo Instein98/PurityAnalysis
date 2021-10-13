@@ -3,20 +3,14 @@ package org.uiuc.ise.yicheng.purity.analysis.agent.visitors;
 import org.objectweb.asm.Label;
 import org.objectweb.asm.MethodVisitor;
 import org.objectweb.asm.Type;
-import org.objectweb.asm.commons.LocalVariablesSorter;
 import org.uiuc.ise.yicheng.purity.analysis.agent.Config;
 import org.uiuc.ise.yicheng.purity.analysis.agent.PurityRecorder;
 
 import static org.objectweb.asm.Opcodes.*;
-import static org.objectweb.asm.Type.*;
-import static org.objectweb.asm.Type.DOUBLE;
-import static org.objectweb.asm.Type.FLOAT;
-import static org.objectweb.asm.Type.LONG;
 
 /**
  * Created by Yicheng Ouyang on 2021/9/19
  */
-// Todo: add big try catch for the method.
 public class PurityAnalysisMethodVisitor extends MethodVisitor {
 
     /**
@@ -34,9 +28,7 @@ public class PurityAnalysisMethodVisitor extends MethodVisitor {
     private boolean isConstructor = false;
 
     private Label tryStart = new Label();
-    private Label tryEnd = new Label();
-    private Label catchStart = new Label();
-    private Label catchEnd = new Label();
+    private Label tryEndCatchStart = new Label();
 
     public PurityAnalysisMethodVisitor(MethodVisitor mv, String methodName, int access, String desc, String className, boolean isStatic, boolean isPublic) {
         super(Config.ASM_VERSION, mv);
@@ -51,10 +43,9 @@ public class PurityAnalysisMethodVisitor extends MethodVisitor {
     }
 
     // start of the method
+    @Override
     public void visitCode() {
         mv.visitCode();
-//        mv.visitFrame(F_NEW, initLocals.length, initLocals, 0, new Object[]{});
-        mv.visitTryCatchBlock(tryStart, tryEnd, catchStart, "java/lang/Throwable");
         mv.visitLabel(tryStart);
         mv.visitLdcInsn(this.selfMethodId);
         mv.visitMethodInsn(INVOKESTATIC, PurityRecorder.SLASH_CLASS_NAME, PurityRecorder.METHOD_START,
@@ -187,53 +178,19 @@ public class PurityAnalysisMethodVisitor extends MethodVisitor {
     }
 
     @Override
-    public void visitEnd() {
-        mv.visitLabel(tryEnd);
-        mv.visitFrame(F_SAME, 0, null, 0, null); /* This line takes me more than 6 hours */
-        mv.visitJumpInsn(GOTO, catchEnd);
-        mv.visitLabel(catchStart);
-        // exception caught
-        mv.visitFrame(F_SAME1, 0, null, 1, new Object[] {"java/lang/Throwable"});
-        mv.visitLdcInsn(this.selfMethodId);
-        mv.visitMethodInsn(INVOKESTATIC, PurityRecorder.SLASH_CLASS_NAME, PurityRecorder.METHOD_END,
-                "(Ljava/lang/String;)V", false);
-        mv.visitInsn(ATHROW);
-        mv.visitLabel(catchEnd);
-        mv.visitFrame(F_SAME, 0, null, 0, null);
-        switch (Type.getReturnType(selfDesc).getSort()){
-            case BYTE:
-            case CHAR:
-            case SHORT:
-            case BOOLEAN:
-            case INT:
-                mv.visitLdcInsn(0);
-                mv.visitInsn(IRETURN);
-                break;
-            case LONG:
-                mv.visitLdcInsn(0L);
-                mv.visitInsn(LRETURN);
-                break;
-            case FLOAT:
-                mv.visitLdcInsn(0f);
-                mv.visitInsn(FRETURN);
-                break;
-            case DOUBLE:
-                mv.visitLdcInsn(0.0);
-                mv.visitInsn(DRETURN);
-                break;
-            case OBJECT:
-                mv.visitInsn(ACONST_NULL);
-                mv.visitInsn(ARETURN);
-                break;
-            case VOID:
-                mv.visitInsn(RETURN);
-                break;
-        }
-        super.visitEnd();
-    }
-
-    @Override
     public void visitMaxs(int maxStack, int maxLocals) {
-        super.visitMaxs(maxStack + 5, maxLocals + 1);
+        /* It is impossible to create an exception handler covering the entire constructor.
+         * Refer to https://stackoverflow.com/a/69554673/11495796. */
+        if (!isConstructor){
+            mv.visitTryCatchBlock(tryStart, tryEndCatchStart, tryEndCatchStart, "java/lang/Throwable");
+            mv.visitLabel(tryEndCatchStart);
+            // exception caught
+            mv.visitFrame(F_FULL, 0, null, 1, new Object[] {"java/lang/Throwable"});
+            mv.visitLdcInsn(this.selfMethodId);
+            mv.visitMethodInsn(INVOKESTATIC, PurityRecorder.SLASH_CLASS_NAME, PurityRecorder.METHOD_END,
+                    "(Ljava/lang/String;)V", false);
+            mv.visitInsn(ATHROW);
+        }
+        super.visitMaxs(maxStack + 5, maxLocals);
     }
 }
